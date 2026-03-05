@@ -8,8 +8,11 @@ import { useAutoSkip } from './hooks/useAutoSkip';
 import { useStallDetection } from './hooks/useStallDetection';
 import { DesktopControlsWrapper } from './desktop/DesktopControlsWrapper';
 import { DesktopOverlayWrapper } from './desktop/DesktopOverlayWrapper';
+import { DanmakuCanvas } from './DanmakuCanvas';
 import { usePlayerSettings } from './hooks/usePlayerSettings';
-import { useIsIOS } from '@/lib/hooks/mobile/useDeviceDetection';
+import { useDanmaku } from './hooks/useDanmaku';
+import { useIsIOS, useIsMobile } from '@/lib/hooks/mobile/useDeviceDetection';
+import { useDoubleTap } from '@/lib/hooks/mobile/useDoubleTap';
 import './web-fullscreen.css';
 
 interface DesktopVideoPlayerProps {
@@ -24,6 +27,9 @@ interface DesktopVideoPlayerProps {
   currentEpisodeIndex?: number;
   onNextEpisode?: () => void;
   isReversed?: boolean;
+  // Danmaku props
+  videoTitle?: string;
+  episodeName?: string;
 }
 
 export function DesktopVideoPlayer({
@@ -37,10 +43,20 @@ export function DesktopVideoPlayer({
   currentEpisodeIndex = 0,
   onNextEpisode,
   isReversed = false,
+  videoTitle = '',
+  episodeName = '',
 }: DesktopVideoPlayerProps) {
   const { refs, data, actions } = useDesktopPlayerState();
   const { fullscreenType: settingsFullscreenType } = usePlayerSettings();
   const isIOS = useIsIOS();
+  const isMobile = useIsMobile();
+
+  // Danmaku
+  const { danmakuEnabled, setDanmakuEnabled, comments: danmakuComments } = useDanmaku({
+    videoTitle,
+    episodeName,
+    episodeIndex: currentEpisodeIndex,
+  });
 
   // State to track if device is in landscape mode
   const [isLandscape, setIsLandscape] = React.useState(true);
@@ -62,8 +78,13 @@ export function DesktopVideoPlayer({
     };
   }, []);
 
-  // Force windowed fullscreen on iOS to avoid native player hijacking
-  const fullscreenType = isIOS ? 'window' : settingsFullscreenType;
+  // Use user preference for fullscreen type, resolving 'auto' to device default
+  // Auto Rules:
+  // - Mobile: Window Fullscreen (Better for Danmaku/Controls)
+  // - Desktop: Native Fullscreen (Better for PiP/Performance)
+  const fullscreenType = settingsFullscreenType === 'auto'
+    ? (isIOS ? 'window' : isMobile ? 'window' : 'native') // Treat all mobile as window for consistency if auto
+    : settingsFullscreenType;
 
   // Check if we need to force landscape (iOS + Fullscreen + Portrait)
   const shouldForceLandscape = data.isFullscreen && fullscreenType === 'window' && isIOS && !isLandscape;
@@ -135,6 +156,7 @@ export function DesktopVideoPlayer({
 
   const {
     handleMouseMove,
+    handleTouchToggleControls,
     togglePlay,
     handlePlay,
     handlePause,
@@ -142,6 +164,28 @@ export function DesktopVideoPlayer({
     handleLoadedMetadata,
     handleVideoError,
   } = logic;
+
+  // Mobile double-tap gesture for skip forward/backward
+  const { handleTap } = useDoubleTap({
+    onSingleTap: handleTouchToggleControls,
+    onDoubleTapLeft: () => {
+      logic.skipBackward();
+      handleMouseMove(); // Reset 3s auto-hide timer
+    },
+    onDoubleTapRight: () => {
+      logic.skipForward();
+      handleMouseMove(); // Reset 3s auto-hide timer
+    },
+    onSkipContinueLeft: () => {
+      logic.skipBackward();
+      handleMouseMove();
+    },
+    onSkipContinueRight: () => {
+      logic.skipForward();
+      handleMouseMove();
+    },
+    isSkipModeActive: data.showSkipForwardIndicator || data.showSkipBackwardIndicator,
+  });
 
   return (
     <div
@@ -170,14 +214,22 @@ export function DesktopVideoPlayer({
             onError={handleVideoError}
             onWaiting={() => setIsLoading(true)}
             onCanPlay={() => setIsLoading(false)}
-            onClick={(e) => {
-              // Prevent native behavior on iOS
-              // e.preventDefault(); 
-              // React synthetic event doesn't always stop native video toggle on iOS, but good practice
+            onClick={!isMobile ? (e) => {
               togglePlay();
-            }}
+            } : undefined}
+            onTouchStart={isMobile ? handleTap : undefined}
             {...({ 'webkit-playsinline': 'true' } as any)} // Legacy iOS support
           />
+
+          {/* Danmaku Canvas */}
+          {danmakuEnabled && danmakuComments.length > 0 && (
+            <DanmakuCanvas
+              comments={danmakuComments}
+              currentTime={currentTime}
+              isPlaying={isPlaying}
+              duration={duration}
+            />
+          )}
 
           <DesktopOverlayWrapper
             data={data}
