@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { settingsStore, getDefaultSources, type SortOption, type SearchDisplayMode, type ProxyMode } from '@/lib/store/settings-store';
+import { settingsStore, getDefaultSources, type SortOption, type SearchDisplayMode, type ProxyMode, type LocaleOption } from '@/lib/store/settings-store';
 import type { VideoSource, SourceSubscription } from '@/lib/types';
 import {
     type ImportResult,
@@ -19,35 +19,35 @@ export function useSettingsPage() {
     const [isRestoreDefaultsDialogOpen, setIsRestoreDefaultsDialogOpen] = useState(false);
     const [editingSource, setEditingSource] = useState<VideoSource | null>(null);
 
-    const [passwordAccess, setPasswordAccess] = useState(false);
-    const [accessPasswords, setAccessPasswords] = useState<string[]>([]);
-    const [envPasswordSet, setEnvPasswordSet] = useState(false);
-
     // Display settings
     const [realtimeLatency, setRealtimeLatency] = useState(false);
     const [searchDisplayMode, setSearchDisplayMode] = useState<SearchDisplayMode>('normal');
-    const [fullscreenType, setFullscreenType] = useState<'native' | 'window'>('native');
+    const [fullscreenType, setFullscreenType] = useState<'auto' | 'native' | 'window'>('auto');
     const [proxyMode, setProxyMode] = useState<ProxyMode>('retry');
     const [rememberScrollPosition, setRememberScrollPosition] = useState(true);
+    const [locale, setLocale] = useState<LocaleOption>('zh-CN');
+
+    // Danmaku settings
+    const [danmakuApiUrl, setDanmakuApiUrl] = useState('');
+    const [danmakuOpacity, setDanmakuOpacity] = useState(0.7);
+    const [danmakuFontSize, setDanmakuFontSize] = useState(20);
+    const [danmakuDisplayArea, setDanmakuDisplayArea] = useState(0.5);
 
     useEffect(() => {
         const settings = settingsStore.getSettings();
         setSources(settings.sources || []);
         setSubscriptions(settings.subscriptions || []);
         setSortBy(settings.sortBy);
-        setPasswordAccess(settings.passwordAccess);
-        setAccessPasswords(settings.accessPasswords);
         setRealtimeLatency(settings.realtimeLatency);
         setSearchDisplayMode(settings.searchDisplayMode);
         setFullscreenType(settings.fullscreenType);
         setProxyMode(settings.proxyMode);
         setRememberScrollPosition(settings.rememberScrollPosition);
-
-        // Fetch env password status
-        fetch('/api/config')
-            .then(res => res.json())
-            .then(data => setEnvPasswordSet(data.hasEnvPassword))
-            .catch(() => setEnvPasswordSet(false));
+        setLocale(settings.locale);
+        setDanmakuApiUrl(settings.danmakuApiUrl);
+        setDanmakuOpacity(settings.danmakuOpacity);
+        setDanmakuFontSize(settings.danmakuFontSize);
+        setDanmakuDisplayArea(settings.danmakuDisplayArea);
     }, []);
 
     const handleSourcesChange = (newSources: VideoSource[]) => {
@@ -58,10 +58,6 @@ export function useSettingsPage() {
             sources: newSources,
             sortBy,
             subscriptions,
-            searchHistory: true,
-            watchHistory: true,
-            passwordAccess,
-            accessPasswords
         });
     };
 
@@ -86,54 +82,6 @@ export function useSettingsPage() {
             ...currentSettings,
             sources,
             sortBy: newSort,
-            searchHistory: true,
-            watchHistory: true,
-            passwordAccess,
-            accessPasswords
-        });
-    };
-
-    const handlePasswordToggle = (enabled: boolean) => {
-        setPasswordAccess(enabled);
-        const currentSettings = settingsStore.getSettings();
-        settingsStore.saveSettings({
-            ...currentSettings,
-            sources,
-            sortBy,
-            searchHistory: true,
-            watchHistory: true,
-            passwordAccess: enabled,
-            accessPasswords
-        });
-    };
-
-    const handleAddPassword = (password: string) => {
-        const updated = [...accessPasswords, password];
-        setAccessPasswords(updated);
-        const currentSettings = settingsStore.getSettings();
-        settingsStore.saveSettings({
-            ...currentSettings,
-            sources,
-            sortBy,
-            searchHistory: true,
-            watchHistory: true,
-            passwordAccess,
-            accessPasswords: updated
-        });
-    };
-
-    const handleRemovePassword = (password: string) => {
-        const updated = accessPasswords.filter(p => p !== password);
-        setAccessPasswords(updated);
-        const currentSettings = settingsStore.getSettings();
-        settingsStore.saveSettings({
-            ...currentSettings,
-            sources,
-            sortBy,
-            searchHistory: true,
-            watchHistory: true,
-            passwordAccess,
-            accessPasswords: updated
         });
     };
 
@@ -156,8 +104,6 @@ export function useSettingsPage() {
             setSources(settings.sources);
             setSortBy(settings.sortBy);
             setSubscriptions(settings.subscriptions || []);
-            setPasswordAccess(settings.passwordAccess);
-            setAccessPasswords(settings.accessPasswords);
 
             // Reload to apply changes
             setTimeout(() => window.location.reload(), 1000);
@@ -285,7 +231,7 @@ export function useSettingsPage() {
         });
     };
 
-    const handleFullscreenTypeChange = (type: 'native' | 'window') => {
+    const handleFullscreenTypeChange = (type: 'auto' | 'native' | 'window') => {
         setFullscreenType(type);
         const currentSettings = settingsStore.getSettings();
         settingsStore.saveSettings({
@@ -312,6 +258,52 @@ export function useSettingsPage() {
         });
     };
 
+    const handleLocaleChange = (newLocale: LocaleOption) => {
+        setLocale(newLocale);
+        const currentSettings = settingsStore.getSettings();
+        settingsStore.saveSettings({
+            ...currentSettings,
+            locale: newLocale,
+        });
+    };
+
+    const handleDanmakuApiUrlChange = (url: string) => {
+        setDanmakuApiUrl(url);
+        const currentSettings = settingsStore.getSettings();
+        settingsStore.saveSettings({
+            ...currentSettings,
+            danmakuApiUrl: url,
+        });
+    };
+
+    const handleDanmakuOpacityChange = (value: number) => {
+        const clamped = Math.max(0.1, Math.min(1, value));
+        setDanmakuOpacity(clamped);
+        const currentSettings = settingsStore.getSettings();
+        settingsStore.saveSettings({
+            ...currentSettings,
+            danmakuOpacity: clamped,
+        });
+    };
+
+    const handleDanmakuFontSizeChange = (value: number) => {
+        setDanmakuFontSize(value);
+        const currentSettings = settingsStore.getSettings();
+        settingsStore.saveSettings({
+            ...currentSettings,
+            danmakuFontSize: value,
+        });
+    };
+
+    const handleDanmakuDisplayAreaChange = (value: number) => {
+        setDanmakuDisplayArea(value);
+        const currentSettings = settingsStore.getSettings();
+        settingsStore.saveSettings({
+            ...currentSettings,
+            danmakuDisplayArea: value,
+        });
+    };
+
     const handleRestoreDefaults = () => {
         const defaults = getDefaultSources();
         handleSourcesChange(defaults);
@@ -328,9 +320,6 @@ export function useSettingsPage() {
         sources,
         subscriptions,
         sortBy,
-        passwordAccess,
-        accessPasswords,
-        envPasswordSet,
         realtimeLatency,
         searchDisplayMode,
         isAddModalOpen,
@@ -347,15 +336,12 @@ export function useSettingsPage() {
         handleSourcesChange,
         handleAddSource,
         handleSortChange,
-        handlePasswordToggle,
-        handleAddPassword,
-        handleRemovePassword,
         handleExport,
-        handleImportFile, // Renamed from handleImport
-        handleImportLink, // New
-        handleAddSubscription, // New
-        handleRemoveSubscription, // New
-        handleRefreshSubscription, // New
+        handleImportFile,
+        handleImportLink,
+        handleAddSubscription,
+        handleRemoveSubscription,
+        handleRefreshSubscription,
         handleRestoreDefaults,
         handleResetAll,
         editingSource,
@@ -368,5 +354,15 @@ export function useSettingsPage() {
         handleProxyModeChange,
         rememberScrollPosition,
         handleRememberScrollPositionChange,
+        locale,
+        handleLocaleChange,
+        danmakuApiUrl,
+        handleDanmakuApiUrlChange,
+        danmakuOpacity,
+        handleDanmakuOpacityChange,
+        danmakuFontSize,
+        handleDanmakuFontSizeChange,
+        danmakuDisplayArea,
+        handleDanmakuDisplayAreaChange,
     };
 }
