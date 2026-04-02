@@ -4,6 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { getRuntimeFeatures } from '@/lib/server/runtime-features';
 
 export const runtime = 'edge';
 
@@ -66,13 +67,14 @@ async function generateProfileId(password: string): Promise<string> {
 
 export async function GET() {
   const hasAuth = !!(effectiveAdminPassword || ACCOUNTS);
+  const runtimeFeatures = getRuntimeFeatures();
 
   return NextResponse.json({
     hasAuth,
     hasPremiumAuth: !!PREMIUM_PASSWORD,
     persistSession: PERSIST_SESSION,
     subscriptionSources: SUBSCRIPTION_SOURCES,
-    iptvSources: IPTV_SOURCES,
+    iptvSources: runtimeFeatures.iptvEnabled ? IPTV_SOURCES : '',
     mergeSources: MERGE_SOURCES,
     danmakuApiUrl: DANMAKU_API_URL,
   });
